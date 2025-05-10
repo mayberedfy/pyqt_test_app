@@ -1,21 +1,28 @@
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QLabel, QPushButton, QWidget
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import QSize
+from .base_panel import BasePanel
+from .components.serial_widget import SerialWidget
+from .components.control_widget import ControlWidget
 
-class ControlPanel(QMainWindow):
+class ControlPanel(BasePanel):
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle("控制板测试")
+        super().__init__("控制板测试")
         self.setGeometry(100, 100, 800, 600)
+        
+        # 先创建控制组件
+        self.control_widget = ControlWidget()
+        
+        # 创建串口组件时传入控制组件
+        self.serial_widget = SerialWidget(control_widget=self.control_widget)
+        
+        # 添加到布局
+        self.layout.addWidget(self.serial_widget)
+        self.layout.addWidget(self.control_widget)
 
-        self.back_button = QPushButton("返回主界面", self)
-        self.back_button.clicked.connect(self.back_to_main)
-        self.back_button.setGeometry(10, 10, 100, 30)
-
-    def back_to_main(self):
-        from .main_window import MainWindow
-        self.main_window = MainWindow()
-        self.main_window.show()
-        self.close()
+    def cleanup(self):
+        # 确保串口关闭
+        if self.serial_widget.is_open:
+            self.serial_widget.toggle_serial()
 
 
