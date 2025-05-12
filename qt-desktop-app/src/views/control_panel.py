@@ -14,7 +14,7 @@ class ControlPanel(BasePanel):
         self.control_widget = ControlWidget()
         
         # 创建串口组件时传入控制组件
-        self.serial_widget = SerialWidget(control_widget=self.control_widget)
+        self.serial_widget = SerialWidget(control_widget=self.control_widget,parent_type="control")
         
         # 添加到布局
         self.layout.addWidget(self.serial_widget)
@@ -24,5 +24,3 @@ class ControlPanel(BasePanel):
         # 确保串口关闭
         if self.serial_widget.is_open:
             self.serial_widget.toggle_serial()
-
-

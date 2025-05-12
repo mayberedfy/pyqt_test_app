@@ -9,9 +9,7 @@ class ControlWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-
         self.serial_controller = SerialController()
-
 
         # 创建主布局
         self.main_layout = QVBoxLayout(self)
@@ -33,10 +31,11 @@ class ControlWidget(QWidget):
         self.speed_knob.setMaximum(8)
         self.speed_knob.setNotchesVisible(True)
         self.speed_knob.setMinimumSize(120, 120)  # 增大旋钮尺寸
-        self.speed_knob.valueChanged.connect(lambda: self.update_knob_label(self.speed_knob, self.speed_knob_label))
+        # 禁用旋钮交互
+        self.speed_knob.setEnabled(False)
         self.speed_knob_label = QLabel("速度档位: 1")
         self.speed_knob_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.speed_knob_label.setFont(QFont("Arial", 14))  # 增大标签字体
+        self.speed_knob_label.setFont(QFont("Arial", 14))  # 墛大标签字体
         speed_knob_layout.addWidget(self.speed_knob)
         speed_knob_layout.addWidget(self.speed_knob_label)
         
@@ -46,13 +45,18 @@ class ControlWidget(QWidget):
         self.time_knob.setMinimum(1)
         self.time_knob.setMaximum(8)
         self.time_knob.setNotchesVisible(True)
-        self.time_knob.setMinimumSize(120, 120)  # 增大旋钮尺寸
-        self.time_knob.valueChanged.connect(lambda: self.update_knob_label(self.time_knob, self.time_knob_label))
+        self.time_knob.setMinimumSize(120, 120)  # 墛大旋钮尺寸
+        # 禁用旋钮交互
+        self.time_knob.setEnabled(False)
         self.time_knob_label = QLabel("时间档位: 1")
         self.time_knob_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_knob_label.setFont(QFont("Arial", 14))  # 增大标签字体
+        self.time_knob_label.setFont(QFont("Arial", 14))  # 墛大标签字体
         time_knob_layout.addWidget(self.time_knob)
         time_knob_layout.addWidget(self.time_knob_label)
+        
+        # 移除旋钮的valueChanged连接，因为现在只能通过代码设置值
+        # self.speed_knob.valueChanged.connect(lambda: self.update_knob_label(self.speed_knob, self.speed_knob_label))
+        # self.time_knob.valueChanged.connect(lambda: self.update_knob_label(self.time_knob, self.time_knob_label))
         
         # 添加旋钮到水平布局
         knobs_layout.addLayout(speed_knob_layout)
@@ -108,6 +112,14 @@ class ControlWidget(QWidget):
         self.red_light.clicked.connect(self.on_red_light_clicked)
         self.green_light.clicked.connect(self.on_green_light_clicked)  
 
+        # 初始化时所有灯都是暗的
+        self.current_light = None
+        
+        # 连接信号到点击处理函数
+        self.green_light.clicked.connect(lambda: self.toggle_light('green'))
+        self.blue_light.clicked.connect(lambda: self.toggle_light('blue'))
+        self.red_light.clicked.connect(lambda: self.toggle_light('red'))
+
 
     def update_knob_label(self, knob, label):
         if knob == self.speed_knob:
@@ -133,32 +145,80 @@ class ControlWidget(QWidget):
         # button.clicked.connect(lambda: self.toggle_light(button))
         return button
 
-    def toggle_light(self, clicked_button):
-        # 获取所有灯按钮
-        all_lights = [self.green_light, self.blue_light, self.red_light]
+    def toggle_light(self, color):
+        """
+        切换灯光状态，确保只有一个灯能亮
+        Args:
+            color: str, 'green', 'blue' or 'red'
+        """
+        light_map = {
+            'green': self.green_light,
+            'blue': self.blue_light,
+            'red': self.red_light
+        }
         
-        # 如果点击的按钮被选中
-        if clicked_button.isChecked():
-            # 关闭其他所有灯
-            for light in all_lights:
-                if light != clicked_button:
-                    light.setChecked(False)
+        handler_map = {
+            'green': self.on_green_light_clicked,
+            'blue': self.on_blue_light_clicked,
+            'red': self.on_red_light_clicked
+        }
+        
+        if color not in light_map:
+            return
+            
+        target_light = light_map[color]
+        
+        # 当前灯是否已经打开
+        is_on = target_light.isChecked()
+        
+        # 关闭所有灯
+        for light in light_map.values():
+            light.setChecked(False)
+        
+        # 如果当前灯原来是关的，那就打开它
+        if not is_on:
+            target_light.setChecked(True)
+            self.current_light = target_light
+            # 调用对应的处理函数发送命令
+            handler_map[color]()
+        else:
+            # 如果原来就是亮的，那么现在关闭后就不调用处理函数
+            self.current_light = None
 
- # 灯光点击事件处理
+    def set_light_status(self, color):
+        """
+        从外部设置灯光状态
+        Args:
+            color: str, 'green', 'blue' or 'red'
+        """
+        # 调用toggle_light前先确保对应的灯是关闭状态
+        light_map = {
+            'green': self.green_light,
+            'blue': self.blue_light,
+            'red': self.red_light
+        }
+        
+        if color not in light_map:
+            return
+            
+        # 先将要点亮的灯设为未选中状态
+        light_map[color].setChecked(False)
+        
+        # 然后调用toggle_light来点亮它
+        self.toggle_light(color)
+
+    # 修改现有的灯光点击处理函数
     def on_red_light_clicked(self):
         if self.red_light.isChecked():
-            # 发送红灯对应的命令 (status = 0x00)
             command = "10 02 21 23 00 00 00 37 1C 00 00 A9 10 03"
             self.serial_controller.send_command(command)
 
-    def on_blue_light_clicked(self):  # Changed from yellow
+    def on_blue_light_clicked(self):
         if self.blue_light.isChecked():
-            # 发送蓝灯对应的命令 (status = 0x20)
             command = "10 02 21 20 00 00 00 37 1C 00 00 C9 10 03"
             self.serial_controller.send_command(command)
 
-    def on_green_light_clicked(self):  # Changed from blue
+    def on_green_light_clicked(self):
         if self.green_light.isChecked():
-            # 发送绿灯对应的命令 (status = 0x0B)
             command = "10 02 21 23 0B 00 00 37 1C 00 00 B4 10 03"
             self.serial_controller.send_command(command)
