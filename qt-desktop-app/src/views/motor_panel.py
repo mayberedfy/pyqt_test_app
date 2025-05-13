@@ -20,6 +20,10 @@ class MotorPanel(BasePanel):
         # 创建串口组件，传入串口控制器
         self.serial_widget = SerialWidget(serial_controller=self.serial_controller, motor_widget=self.motor_widget, parent_type="motor")
      
+        # 设置电机组件与串口组件绑定
+        self.motor_widget.serial_widget = self.serial_widget  
+
+
         # 添加到布局
         self.layout.addWidget(self.serial_widget)
         self.layout.addWidget(self.motor_widget)
