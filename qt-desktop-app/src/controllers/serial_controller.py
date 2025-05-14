@@ -44,10 +44,15 @@ class SerialController(QObject):
     def send_command(self, command):
         """发送命令到串口"""
         try:
+            
             # 将命令字符串转换为字节
+            
             if isinstance(command, str):
                 # 处理十六进制字符串 (例如 "10 02 21 00...")
-                cmd_bytes = bytearray.fromhex(command)
+                # cmd_bytes = bytearray.fromhex(command)
+                # 清理字符串，只保留有效的十六进制字符
+                clean_hex = ''.join(c for c in command if c.isalnum() or c.isspace())
+                cmd_bytes = bytearray.fromhex(clean_hex)
             else:
                 # 处理已经是字节的情况
                 cmd_bytes = command
@@ -63,7 +68,7 @@ class SerialController(QObject):
         except Exception as e:
             print(f"发送命令失败: {str(e)}")
             return False
-
+        
     def read_data(self):
         while self.running and self.serial_port and self.serial_port.is_open:
             try:

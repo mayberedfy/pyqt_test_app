@@ -33,17 +33,51 @@ class MotorWidget(QWidget):
         title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         display_layout.addWidget(title)
         
-        # 创建参数网格布局
+        
         params_grid = QGridLayout()
         params_grid.setVerticalSpacing(10)
         params_grid.setHorizontalSpacing(15)
         
-        # 添加五个运行参数显示
+        # 创建一个容器widget来装载网格布局
+        params_container = QWidget()
+        params_container.setLayout(params_grid)
+        params_container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        
+        # 使用水平布局包裹容器widget以实现水平居中
+        params_wrapper = QHBoxLayout()
+        params_wrapper.addStretch(1)  # 左侧弹性空间
+        params_wrapper.addWidget(params_container)
+        params_wrapper.addStretch(1)  # 右侧弹性空间
+        
+        # 将水平包装布局添加到display_layout
+        display_layout.addLayout(params_wrapper)
+        # 添加系统状态显示
         self._add_param_row(params_grid, 0, "system_status", "系统状态", "停止")
-        self._add_param_row(params_grid, 1, "motor_speed", "电机转速", "0 RPM")
-        self._add_param_row(params_grid, 2, "voltage", "电压值", "0 V")
-        self._add_param_row(params_grid, 3, "temperature", "温度值", "0 °C")
-        self._add_param_row(params_grid, 4, "power", "输出功率", "0 W")
+        
+        # 添加控制板灯光显示
+        light_label = QLabel("控制板灯光:")
+        light_label.setMinimumWidth(80)
+        light_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        params_grid.addWidget(light_label, 1, 0)
+        
+        # 创建灯光指示器(圆角矩形)
+        self.light_indicator = QPushButton()
+        self.light_indicator.setEnabled(False)  # 禁用点击功能，仅用于显示
+        self.light_indicator.setFixedSize(30, 24)  # 设置为矩形，较小尺寸
+        self.light_indicator.setStyleSheet("""
+            QPushButton {
+                border-radius: 5px;  /* 圆角矩形 */
+                border: 1px solid #999;
+                background-color: #f5f5f5;  /* 默认灰色 */
+            }
+        """)
+        params_grid.addWidget(self.light_indicator, 1, 1)
+        
+        # 添加其他运行参数显示 (注意索引从2开始)
+        self._add_param_row(params_grid, 2, "motor_speed", "电机转速", "0 RPM")
+        self._add_param_row(params_grid, 3, "voltage", "电压值", "0 V")
+        self._add_param_row(params_grid, 4, "temperature", "温度值", "0 °C")
+        self._add_param_row(params_grid, 5, "power", "输出功率", "0 W")
         
         display_layout.addLayout(params_grid)
         
@@ -76,11 +110,8 @@ class MotorWidget(QWidget):
         
         # 添加按钮布局
         display_layout.addLayout(button_container)
-        
-        # 添加弹性空间在按钮下方
-        display_layout.addStretch()
-        
-        # 添加到主布局，设置比例为1（左右各50%）
+        display_layout.addStretch()  # 添加弹性空间
+   
         self.main_layout.addWidget(display_frame, 1)
 
     def _add_param_row(self, grid_layout, row, label_name, name, default_value):
@@ -148,7 +179,7 @@ class MotorWidget(QWidget):
         self.speed_input = QSpinBox()
         self.speed_input.setRange(600, 3450)
         self.speed_input.setSingleStep(50)
-        self.speed_input.setSuffix(" RPM")
+        self.speed_input.setSuffix("   RPM")
         self.speed_input.setValue(600)
         self.speed_input.setStyleSheet("""
             QSpinBox {
@@ -216,140 +247,69 @@ class MotorWidget(QWidget):
         # 增加弹性空间
         control_layout.addStretch()
         
-        # 创建指示灯区域 - 修改部分
-        lights_frame = QFrame()
-        lights_frame.setFrameStyle(QFrame.Shape.Box)
-        lights_frame_layout = QVBoxLayout(lights_frame)
-        lights_frame_layout.setContentsMargins(10, 10, 10, 15)  # 增加底部边距给标签留出空间
+         # 添加获取软件版本区域
+        version_layout = QHBoxLayout()
+       
+        # 获取软件版本按钮
+        self.get_version_button = QPushButton("获取软件版本")
+        self.get_version_button.clicked.connect(self._on_get_version)
+        self.get_version_button.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                color: white;
+                border-radius: 5px;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #8e44ad;
+            }
+            QPushButton:pressed {
+                background-color: #6c3483;
+            }
+        """)
+        self.get_version_button.setFixedWidth(120)  # 固定按钮宽度
+        
+        
+        # 版本信息显示标签
+        self.version_label = QLabel("未获取")
+        self.version_label.setMinimumWidth(150)  # 增加最小宽度
+        self.version_label.setStyleSheet("""
+            QLabel {
+                color: #34495e;
+                font-weight: bold;
+                background-color: #f5f5f5;
+                border: none;
+                border-radius: 3px;
+                padding: 5px 10px;
+                text-align: center;
+            }
+        """)
+        self.version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.version_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        
+        version_layout.addWidget(self.get_version_button)
+        version_layout.addWidget(self.version_label, 1)  # 添加伸缩因子1
 
-        # 添加指示灯标题
-        lights_title = QLabel("电机板灯光信号")
-        lights_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        lights_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lights_frame_layout.addWidget(lights_title)
 
-        # 创建指示灯容器 - 使用HBox确保水平居中
-        lights_container = QHBoxLayout()
-        lights_container.setContentsMargins(0, 10, 0, 0)
-        lights_container.addStretch(1)  # 左侧弹性空间
+        # 添加到控制布局
+        control_layout.addLayout(version_layout)
 
-        # 创建指示灯布局
-        lights_layout = QHBoxLayout()
-        lights_layout.setSpacing(30)  # 增加灯之间的距离，使排布更均匀
 
-        # 创建每个指示灯，现在直接在这个布局中而不是单独的垂直布局
-        # 运行灯（绿色）
-        self.green_light = self._create_light_button("", "green")
-        lights_layout.addWidget(self.green_light)
-
-        # 故障灯（蓝色）
-        self.blue_light = self._create_light_button("", "blue")
-        lights_layout.addWidget(self.blue_light)
-
-        # 停机灯（红色）
-        self.red_light = self._create_light_button("", "red")
-        lights_layout.addWidget(self.red_light)
-
-        # 添加灯光布局到容器
-        lights_container.addLayout(lights_layout)
-        lights_container.addStretch(1)  # 右侧弹性空间
-        lights_frame_layout.addLayout(lights_container)
-
-        # 创建标签容器 - 与灯对齐
-        labels_container = QHBoxLayout()
-        labels_container.setContentsMargins(0, 5, 0, 0)  # 与灯之间留出一点空间
-        labels_container.addStretch(1)  # 左侧弹性空间
-
-        # 创建标签布局 - 与灯光布局相同间距
-        labels_layout = QHBoxLayout()
-        labels_layout.setSpacing(30)  # 与灯之间相同的间距
-
-        # 添加各标签，确保与灯对齐
-        green_label = QLabel("运行")
-        green_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        green_label.setFixedWidth(40)  # 与灯相同宽度
-        labels_layout.addWidget(green_label)
-
-        blue_label = QLabel("故障")
-        blue_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        blue_label.setFixedWidth(40)  # 与灯相同宽度
-        labels_layout.addWidget(blue_label)
-
-        red_label = QLabel("停机")
-        red_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        red_label.setFixedWidth(40)  # 与灯相同宽度
-        labels_layout.addWidget(red_label)
-
-        # 添加标签布局到容器
-        labels_container.addLayout(labels_layout)
-        labels_container.addStretch(1)  # 右侧弹性空间
-        lights_frame_layout.addLayout(labels_container)
-
-        control_layout.addWidget(lights_frame)
+        # 添加弹性空间在按钮下方
+        control_layout.addStretch()
         
         self.main_layout.addWidget(control_frame, 1)
         
-        # 初始化灯光状态，确保禁用点击功能
-        self.current_light = None
-        self.green_light.setEnabled(False)
-        self.blue_light.setEnabled(False)
-        self.red_light.setEnabled(False)
 
-    def _create_light_button(self, text, color):
-        """创建指示灯按钮 - 只用于显示，不可点击"""
-        button = QPushButton(text)
-        button.setMinimumSize(40, 40)
-        button.setMaximumSize(40, 40)
-        button.setCheckable(True)  # 保持可选中状态，但不响应点击
-        button.setEnabled(False)   # 禁用按钮交互
-        button.setStyleSheet("""
-            QPushButton {
-                border-radius: 20px;
-                border: 2px solid #999;
-                background-color: #eee;  /* 默认背景色 */
-            }
-            QPushButton:checked {
-                background-color: %s;
-                border: 2px solid %s;
-            }
-            /* 确保禁用后仍然显示颜色 */
-            QPushButton:disabled:checked {
-                background-color: %s;
-                border: 2px solid %s;
-            }
-        """ % (color, color, color, color))
-        return button
+       
 
-    def toggle_light(self, color):
-        """切换灯光状态，确保只有一个灯能亮"""
-        light_map = {
-            'green': self.green_light,
-            'blue': self.blue_light,
-            'red': self.red_light
-        }
-        
-        if color not in light_map:
+    def _on_get_version(self):
+        """获取软件版本"""
+        if not self._check_serial_connection():
             return
-            
-        target_light = light_map[color]
-        
-        # 如果目标灯已经是亮的，则不做任何操作
-        if self.current_light == target_light and target_light.isChecked():
-            return
-            
-        # 关闭其他所有灯
-        for light in light_map.values():
-            if light != target_light:
-                light.setChecked(False)
-        
-        # 点亮目标灯
-        target_light.setChecked(True)
-        self.current_light = target_light
 
-    def set_light_status(self, color):
-        """从外部设置灯光状态"""
-        self.toggle_light(color)
-
+        command = "10 02 20 00 00 32 10 03"
+        self.serial_controller.send_command(command)
 
     def _on_stop(self):
         """停止电机"""
@@ -379,6 +339,9 @@ class MotorWidget(QWidget):
         """启动电机"""
         if not self._check_serial_connection():
             return
+        
+        # 电机启动时先发送速度设定命令，然后再发送启动命令
+        self._on_send_speed()  
             
         command = "10 02 81 00 00 93 10 03"
         self.serial_controller.send_command(command)
@@ -513,7 +476,6 @@ class MotorWidget(QWidget):
         # 断开信号连接
         self.serial_controller.data_received.disconnect(self.handle_data_received)
                  
-
     def update_motor_info(self, data):
         """根据接收到的数据更新电机信息
         data格式: [0x10, 0x02, 0x21, status, speed_high, speed_low, voltage_high, voltage_low, temp, power_high, power_low, checksum, 0x10, 0x03]
@@ -524,10 +486,10 @@ class MotorWidget(QWidget):
             status_text = "未知"
             if status == 0x00:
                 status_text = "停止"
-                self.set_light_status('red')
+                self.set_light_status('red')  # 红灯表示停止
             elif status == 0x0B:
                 status_text = "运行"
-                self.set_light_status('green')
+                self.set_light_status('green')  # 绿灯表示运行
             elif status in [0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x50]:
                 # 故障代码映射字典
                 fault_codes = {
@@ -553,7 +515,7 @@ class MotorWidget(QWidget):
                     status_text = "故障: 未定义错误"
                 
                 status_text = "故障"
-                self.set_light_status('blue')
+                self.set_light_status('blue')  # 蓝灯表示故障
             
             # 更新系统状态标签
             self.system_status_label.setText(status_text)
@@ -573,3 +535,24 @@ class MotorWidget(QWidget):
             # 提取功率 (2字节)
             power = (data[9] << 8) | data[10]
             self.power_label.setText(f"{power} W")
+
+    def set_light_status(self, color):
+        """设置灯光状态
+        color: 'red', 'green', 'blue' 或 'gray'
+        """
+        style_base = """
+            QPushButton {
+                border-radius: 5px;
+                border: 1px solid %s;
+                background-color: %s;
+            }
+        """
+        
+        if color == 'red':
+            self.light_indicator.setStyleSheet(style_base % ('#d32f2f', '#f44336'))
+        elif color == 'green':
+            self.light_indicator.setStyleSheet(style_base % ('#388e3c', '#4caf50'))
+        elif color == 'blue':
+            self.light_indicator.setStyleSheet(style_base % ('#1565c0', '#2196f3'))
+        else:  # 默认灰色
+            self.light_indicator.setStyleSheet(style_base % ('#999', '#f5f5f5'))

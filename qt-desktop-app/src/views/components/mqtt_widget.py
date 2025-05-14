@@ -15,155 +15,201 @@ class MqttWidget(QWidget):
         self.client = None
         self.is_connected = False
         
-        # 创建主布局
-        self.main_layout = QVBoxLayout(self)
+        # 创建主布局 - 使用网格布局
+        self.main_layout = QGridLayout(self)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(10)  # 设置网格间距
         
-        # 创建连接设置区域
-        self._create_connection_section()
+        # 调整行列拉伸比例 - 减小上方行的高度比例
+        self.main_layout.setColumnStretch(0, 1)  # 左侧列
+        self.main_layout.setColumnStretch(1, 1)  # 右侧列
+        self.main_layout.setRowStretch(0, 1)    # 上方行 (从1改为1)
+        self.main_layout.setRowStretch(1, 3)    # 下方行 (从2改为3，增加下方行的比例)
         
-        # 创建发布/订阅区域
-        self._create_pubsub_section()
-        
-        # 创建消息日志区域
-        self._create_log_section()
+        # 创建四个区域
+        self._create_connection_section()  # 左上角
+        self._create_subscribe_section()   # 右上角
+        self._create_publish_section()     # 左下角
+        self._create_log_section()         # 右下角
         
         # 连接信号
         self.message_received.connect(self._on_message_received)
         self.connection_changed.connect(self._on_connection_changed)
 
     def _create_connection_section(self):
-        """创建MQTT连接设置区域"""
+        """创建MQTT连接设置区域 - 左上方"""
         conn_frame = QFrame()
         conn_frame.setFrameStyle(QFrame.Shape.Box)
         
         conn_layout = QGridLayout(conn_frame)
-        conn_layout.setColumnStretch(2, 1)  # 第三列占据更多空间
+        conn_layout.setColumnStretch(2, 1)  
+        # 减小垂直间距
+        conn_layout.setVerticalSpacing(5)
+        conn_layout.setContentsMargins(8, 8, 8, 8)  # 减小内边距
         
         # 添加标题
         title = QLabel("MQTT连接设置")
-        title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        conn_layout.addWidget(title, 0, 0, 1, 3)
+        title.setFont(QFont("Arial", 11, QFont.Weight.Bold))  # 减小字体
+        conn_layout.addWidget(title, 0, 0, 1, 4)
         
         # 服务器设置
         conn_layout.addWidget(QLabel("Broker:"), 1, 0)
         self.broker_input = QLineEdit("localhost")
+        # 减小输入框的高度
+        self.broker_input.setFixedHeight(24)
         conn_layout.addWidget(self.broker_input, 1, 1)
         
         conn_layout.addWidget(QLabel("Port:"), 1, 2)
         self.port_input = QLineEdit("1883")
+        self.port_input.setFixedHeight(24)
         conn_layout.addWidget(self.port_input, 1, 3)
         
         # 用户认证
         conn_layout.addWidget(QLabel("Username:"), 2, 0)
         self.username_input = QLineEdit()
+        self.username_input.setFixedHeight(24)
         conn_layout.addWidget(self.username_input, 2, 1)
         
         conn_layout.addWidget(QLabel("Password:"), 2, 2)
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setFixedHeight(24)
         conn_layout.addWidget(self.password_input, 2, 3)
         
         # 连接按钮
         self.connect_button = QPushButton("Connect")
+        self.connect_button.setFixedHeight(26)  # 设置合适的按钮高度
         self.connect_button.clicked.connect(self.toggle_connection)
         conn_layout.addWidget(self.connect_button, 3, 3)
         
-        self.main_layout.addWidget(conn_frame)
+        # 添加到主布局 - 左上方(0,0)
+        self.main_layout.addWidget(conn_frame, 0, 0)
 
-    def _create_pubsub_section(self):
-        """创建发布/订阅区域"""
-        pubsub_frame = QFrame()
-        pubsub_frame.setFrameStyle(QFrame.Shape.Box)
+    def _create_subscribe_section(self):
+        """创建订阅主题区域 - 右上方"""
+        subscribe_frame = QFrame()
+        subscribe_frame.setFrameStyle(QFrame.Shape.Box)
         
-        pubsub_layout = QHBoxLayout(pubsub_frame)
+        subscribe_layout = QVBoxLayout(subscribe_frame)
+        # 减少内部间距
+        subscribe_layout.setContentsMargins(8, 8, 8, 8)
+        subscribe_layout.setSpacing(5)  # 减少垂直间距
         
-        # 发布区域
-        publish_layout = QVBoxLayout()
-        publish_title = QLabel("发布消息")
+        # 标题
+        subscribe_title = QLabel("订阅主题")
+        subscribe_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))  # 减小字体
+        subscribe_layout.addWidget(subscribe_title)
+        
+        # 主题输入
+        topic_layout = QHBoxLayout()
+        topic_layout.setSpacing(5)
+        topic_layout.addWidget(QLabel("Topic:"))
+        self.subscribe_topic = QLineEdit()
+        self.subscribe_topic.setFixedHeight(24)  # 减小高度
+        topic_layout.addWidget(self.subscribe_topic)
+        subscribe_layout.addLayout(topic_layout)
+        
+        # QoS选择 - 可以使用水平布局与按钮并排
+        controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(5)
+        
+        qos_section = QHBoxLayout()
+        qos_section.addWidget(QLabel("QoS:"))
+        self.qos_combo = QComboBox()
+        self.qos_combo.addItems(["0", "1", "2"])
+        self.qos_combo.setFixedHeight(24)  # 减小高度
+        qos_section.addWidget(self.qos_combo)
+        qos_section.addStretch()
+        
+        controls_layout.addLayout(qos_section)
+        
+        # 将订阅和取消订阅按钮放在水平布局中
+        self.subscribe_button = QPushButton("订阅")
+        self.subscribe_button.setFixedHeight(26)  # 减小高度
+        self.subscribe_button.clicked.connect(self._subscribe_topic)
+        
+        self.unsubscribe_button = QPushButton("取消订阅") 
+        self.unsubscribe_button.setFixedHeight(26)  # 减小高度
+        self.unsubscribe_button.clicked.connect(self._unsubscribe_topic)
+        
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.subscribe_button)
+        buttons_layout.addWidget(self.unsubscribe_button)
+        
+        subscribe_layout.addLayout(controls_layout)
+        subscribe_layout.addLayout(buttons_layout)
+        
+        # 不再需要额外的弹性空间
+        # subscribe_layout.addStretch() 
+        
+        # 添加到主布局 - 右上方(0,1)
+        self.main_layout.addWidget(subscribe_frame, 0, 1)
+
+    def _create_publish_section(self):
+        """创建发布消息区域 - 左下方"""
+        publish_frame = QFrame()
+        publish_frame.setFrameStyle(QFrame.Shape.Box)
+        
+        publish_layout = QVBoxLayout(publish_frame)
+        publish_layout.setContentsMargins(8, 8, 8, 8)  # 减小内边距
+        publish_layout.setSpacing(5)  # 减少垂直间距
+        
+        # 标题
+        publish_title = QLabel("发布信息")
         publish_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         publish_layout.addWidget(publish_title)
         
         # 主题输入
         topic_layout = QHBoxLayout()
+        topic_layout.setSpacing(5)
         topic_layout.addWidget(QLabel("Topic:"))
         self.publish_topic = QLineEdit()
+        self.publish_topic.setFixedHeight(24)  # 减小高度
         topic_layout.addWidget(self.publish_topic)
         publish_layout.addLayout(topic_layout)
         
         # 消息输入
+        publish_layout.addWidget(QLabel("Message:"))
         self.publish_message = QTextEdit()
         self.publish_message.setPlaceholderText("输入要发布的消息")
-        self.publish_message.setMaximumHeight(100)
         publish_layout.addWidget(self.publish_message)
         
         # 发布按钮
         self.publish_button = QPushButton("发布")
+        self.publish_button.setFixedHeight(26)  # 减小高度
         self.publish_button.clicked.connect(self._publish_message)
         publish_layout.addWidget(self.publish_button)
         
-        # 订阅区域
-        subscribe_layout = QVBoxLayout()
-        subscribe_title = QLabel("订阅主题")
-        subscribe_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        subscribe_layout.addWidget(subscribe_title)
-        
-        # 主题输入
-        sub_topic_layout = QHBoxLayout()
-        sub_topic_layout.addWidget(QLabel("Topic:"))
-        self.subscribe_topic = QLineEdit()
-        sub_topic_layout.addWidget(self.subscribe_topic)
-        subscribe_layout.addWidget(self.subscribe_topic)
-        
-        # QoS选择
-        qos_layout = QHBoxLayout()
-        qos_layout.addWidget(QLabel("QoS:"))
-        self.qos_combo = QComboBox()
-        self.qos_combo.addItems(["0", "1", "2"])
-        qos_layout.addWidget(self.qos_combo)
-        qos_layout.addStretch()
-        subscribe_layout.addLayout(qos_layout)
-        
-        # 订阅按钮
-        button_layout = QHBoxLayout()
-        self.subscribe_button = QPushButton("订阅")
-        self.subscribe_button.clicked.connect(self._subscribe_topic)
-        button_layout.addWidget(self.subscribe_button)
-        
-        self.unsubscribe_button = QPushButton("取消订阅")
-        self.unsubscribe_button.clicked.connect(self._unsubscribe_topic)
-        button_layout.addWidget(self.unsubscribe_button)
-        subscribe_layout.addLayout(button_layout)
-        
-        # 添加到主布局
-        pubsub_layout.addLayout(publish_layout)
-        pubsub_layout.addLayout(subscribe_layout)
-        self.main_layout.addWidget(pubsub_frame)
+        # 添加到主布局 - 左下方(1,0)
+        self.main_layout.addWidget(publish_frame, 1, 0)
 
     def _create_log_section(self):
-        """创建消息日志区域"""
+        """创建消息日志区域 - 右下方"""
         log_frame = QFrame()
         log_frame.setFrameStyle(QFrame.Shape.Box)
         
         log_layout = QVBoxLayout(log_frame)
+        log_layout.setContentsMargins(8, 8, 8, 8)  # 减小内边距
+        log_layout.setSpacing(5)  # 减少垂直间距
         
         # 标题
-        log_title = QLabel("消息日志")
-        log_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        log_title = QLabel("信息日志")
+        log_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         log_layout.addWidget(log_title)
         
         # 日志文本框
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(200)
         log_layout.addWidget(self.log_text)
         
         # 清除按钮
         self.clear_button = QPushButton("清除日志")
+        self.clear_button.setFixedHeight(26)  # 减小高度
         self.clear_button.clicked.connect(self.log_text.clear)
         log_layout.addWidget(self.clear_button)
         
-        self.main_layout.addWidget(log_frame)
+        # 添加到主布局 - 右下方(1,1)
+        self.main_layout.addWidget(log_frame, 1, 1)
 
     def toggle_connection(self):
         """切换连接状态"""

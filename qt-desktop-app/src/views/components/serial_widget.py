@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QComboBox, QLineEdit, QPushButton, QTextEdit, QGroupBox, QGridLayout)
+                            QComboBox, QLineEdit, QPushButton, QTextEdit, QGroupBox, QGridLayout, QFileDialog,
+                            QApplication)
 from PyQt6 import QtCore
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6 import QtGui
-from controllers.serial_controller import SerialController
+from controllers.serial_data_controller import SerialDataController
 import serial
 import serial.tools.list_ports
 from datetime import datetime
@@ -21,12 +22,17 @@ class SerialWidget(QWidget):
         self.motor_widget = motor_widget
         self.control_widget = control_widget
 
-        self.parent_type = parent_type  # "control" 或 "motor"
+        # 创建新的串口控制器实例
+        self.serial_data_controller = SerialDataController(
+            self.serial_controller,
+            self.control_widget,
+            self.motor_widget,
+            self
+        )  
+
+        # "control" 或 "motor"
+        self.parent_type = parent_type
         self.command_handlers = {}
-
-
-        print(f"SerialWidget parent_type: {self.parent_type}")
-        print(f"command_handlers: {self.command_handlers}")
 
         # 初始化串口对象
         self.serial = None
@@ -47,7 +53,7 @@ class SerialWidget(QWidget):
         """创建用户界面 - 左右布局版本"""
         # 创建主布局
         main_layout = QHBoxLayout(self)  # 使用水平布局作为主布局
-        main_layout.setContentsMargins(10, 40, 10, 10)
+        main_layout.setContentsMargins(10, 1, 10, 10)
         main_layout.setSpacing(10)
         
         # ===== 左侧：控制面板 =====
@@ -85,54 +91,39 @@ class SerialWidget(QWidget):
         buttons_layout = QVBoxLayout()
         buttons_layout.setSpacing(8)
         
-        # 刷新端口按钮 (第一个按钮)
-        self.btn_refresh = QPushButton("刷新端口")
+        # 刷新端口按钮 (第一个按钮) - 修改风格，移除背景色，添加图标
+        refresh_button_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("刷新端口⟳")
         self.btn_refresh.setFixedHeight(36)
+        self.btn_refresh.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        # 设置刷新按钮样式 - 没有背景色，只有边框
         self.btn_refresh.setStyleSheet("""
             QPushButton {
-                background-color: #2196F3;
-                color: white;
+                color: #2196F3;
+                border: 1px solid #2196F3;
                 border-radius: 4px;
-                border: none;
                 padding: 6px 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #0b7dda;
-            }
-        """)
-        buttons_layout.addWidget(self.btn_refresh)
-        
-        # Open/Close 按钮 (第二个按钮) - 更新样式定义
-        self.btn_toggle = QPushButton("打开")  # 改为中文"打开"
-        self.btn_toggle.setFixedHeight(36)
-        self.btn_toggle.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        # 不设置默认样式，通过updateToggleButtonStyle方法动态设置
-        buttons_layout.addWidget(self.btn_toggle)
-        
-        # 清空显示按钮 (第三个按钮)
-        self.btn_clear = QPushButton("清空显示")
-        self.btn_clear.setFixedHeight(36)
-        self.btn_clear.setStyleSheet("""
-            QPushButton {
-                background-color: #ff5722;
-                color: white;
-                border-radius: 4px;
-                border: none;
-                padding: 6px 12px;
-            }
-            QPushButton:hover {
-                background-color: #e64a19;
+                background-color: #e3f2fd;
             }
             QPushButton:pressed {
-                background-color: #bf360c;
-            }
-            QPushButton:disabled {
-                background-color: #ffccbc;
-                color: #b0bec5;
+                background-color: #bbdefb;
             }
         """)
-        self.btn_clear.setEnabled(False)  # 初始状态设为禁用
-        buttons_layout.addWidget(self.btn_clear)
+        
+        # 添加图标和按钮到同一行
+        refresh_button_layout.addWidget(self.btn_refresh)
+        buttons_layout.addLayout(refresh_button_layout)
+        
+        # Open/Close 按钮 (第二个按钮)
+        self.btn_toggle = QPushButton("打开")
+        self.btn_toggle.setFixedHeight(36)
+        self.btn_toggle.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        # 样式会在updateToggleButtonStyle方法中设置
+        buttons_layout.addWidget(self.btn_toggle)
         
         port_layout.addLayout(buttons_layout)
         port_layout.addStretch()  # 添加弹性空间
@@ -162,6 +153,88 @@ class SerialWidget(QWidget):
         """)
         data_layout.addWidget(self.data_display)
         
+        # 右侧按钮区域 - 放置清空显示、数据保存和数据复制按钮
+        buttons_row = QHBoxLayout()
+           
+        # 数据保存按钮
+        self.btn_save = QPushButton("数据保存")
+        self.btn_save.setFixedHeight(36)
+        self.btn_save.setStyleSheet("""
+            QPushButton {
+                color: #4caf50;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e8f5e9;
+            }
+            QPushButton:pressed {
+                background-color: #c8e6c9;
+            }
+            QPushButton:disabled {
+                color: #c8e6c9;
+                border: 1px solid #c8e6c9;
+            }
+        """)
+        self.btn_save.setEnabled(False)
+        buttons_row.addWidget(self.btn_save)
+        
+        # 数据复制按钮
+        self.btn_copy = QPushButton("数据复制")
+        self.btn_copy.setFixedHeight(36)
+        self.btn_copy.setStyleSheet("""
+            QPushButton {
+                color: #3f51b5;
+                border: 1px solid #3f51b5;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e8eaf6;
+            }
+            QPushButton:pressed {
+                background-color: #c5cae9;
+            }
+            QPushButton:disabled {
+                color: #c5cae9;
+                border: 1px solid #c5cae9;
+            }
+        """)
+        self.btn_copy.setEnabled(False)
+        buttons_row.addWidget(self.btn_copy)
+
+         # 清空显示按钮
+        self.btn_clear = QPushButton("清空显示")
+        self.btn_clear.setFixedHeight(36)
+        self.btn_clear.setStyleSheet("""
+            QPushButton {
+                color: #ff5722;
+                border: 1px solid #ff5722;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #fbe9e7;
+            }
+            QPushButton:pressed {
+                background-color: #ffccbc;
+            }
+            QPushButton:disabled {
+                color: #ffccbc;
+                border: 1px solid #ffccbc;
+            }
+        """)
+        self.btn_clear.setEnabled(False)
+        buttons_row.addWidget(self.btn_clear)
+        
+        
+        # 添加按钮行到布局
+        data_layout.addLayout(buttons_row)
+        
         # 添加数据显示到右侧面板
         right_panel.addWidget(data_group)
         
@@ -173,13 +246,11 @@ class SerialWidget(QWidget):
         self.btn_toggle.clicked.connect(self.toggle_serial)
         self.btn_refresh.clicked.connect(self.refresh_ports)
         self.btn_clear.clicked.connect(self.clear_display)
+        self.btn_save.clicked.connect(self.save_display_data)
+        self.btn_copy.clicked.connect(self.copy_display_data)
         
         # 初始化按钮样式
         self.updateToggleButtonStyle()
-
-    def register_command_handler(self, cmd, handler):
-        """注册特定命令处理函数"""
-        self.command_handlers[cmd] = handler
 
     def refresh_ports(self):
         """List available serial ports and add them to the combo box"""
@@ -257,264 +328,28 @@ class SerialWidget(QWidget):
         """清空显示框内容"""
         self.data_display.clear()
         self.btn_clear.setEnabled(False)  # 清空后禁用按钮
+        self.btn_save.setEnabled(False)   # 清空后禁用按钮
+        self.btn_copy.setEnabled(False)   # 清空后禁用按钮
 
     def update_display(self, data):
         """更新显示内容并启用清空按钮"""
         self.data_display.append(data)
         self.data_display.moveCursor(QtGui.QTextCursor.MoveOperation.End)
         self.btn_clear.setEnabled(True)  # 有新数据时启用清空按钮
+        self.btn_save.setEnabled(True)   # 有新数据时启用保存按钮
+        self.btn_copy.setEnabled(True)   # 有新数据时启用复制按钮
 
     def handle_data_received(self, data):
         if self.parent_type == "control":
-            self.control_serial_data_handle(data)
+            self.serial_data_controller.control_serial_data_handle(data)
         elif self.parent_type == "motor":
-            self.motor_serial_data_handle(data)
-        
+            self.serial_data_controller.motor_serial_data_handle(data)
+
     def handle_command_sent(self, command):
         """处理发送的命令"""
         # 格式化并显示命令
         display_text = self.format_command(command)
         self.update_display(display_text)
-
-
-    # 控制板的串口数据处理方法
-    def control_serial_data_handle(self, data):
-        try:
-            
-            # 转换数据为十六进制
-            hex_data = ' '.join([f"{byte:02X}" for byte in data])
-            self.record_received_data(data)
-
-            data_length = len(data)
-            if data_length < 8:
-                print("Received data is too short:", hex_data)
-                return
-
-            # 通用处理...
-            CMD = data[2]
-            # 处理数据
-            # 先校验尾数
-            response = ""
-            if data[0] == 0x10 and data[1] == 0x02 :
-                CMD = data[2]
-                if CMD == 0x83:
-                    # 读取档位命令：
-                    # 发送：CMD = 0x83  DATA0 = 速度档位信息 DATA1 = 时间档位信息
-                    # 读系统参数：
-                    # 发送：CMD = 0x83  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送 
-                    # 发送：CMD = 0x83  DATA0 = 速度档位信息 DATA1 = 时间档位信息;
-                    response = "10 02 83 00 01 96 10 03"
-                    # 调整档位信息
-                    speed_gear = data[3]
-                    time_gear = data[4]
-
-                    self.control_widget.speed_knob.setValue(speed_gear)
-                    self.control_widget.time_knob.setValue(time_gear)
-                    self.control_widget.update_knob_label(self.control_widget.speed_knob, self.control_widget.speed_knob_label)
-                    self.control_widget.update_knob_label(self.control_widget.time_knob, self.control_widget.time_knob_label)
-                    print(f"Speed Gear: {speed_gear}, Time Gear: {time_gear}")
-                                   
-                elif CMD == 0x82:
-                    # 设定转速
-                    # 发送：CMD = 0x82  DATA0 ~DATA1：设定转速值
-                    # 发送：CMD = 0x82  DATA0 ~DATA1：设定转速值
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 82 00 01 95 10 03"
-                    
-                elif CMD == 0x81:   
-                    # 电机运行
-                    # 发送：CMD = 0x81  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 81 00 01 94 10 03"
-
-                elif CMD == 0x80:
-                    # 电机停止
-                    # 发送：CMD = 0x80  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 80 00 01 93 10 03"
-
-                elif CMD == 0x21:
-                    # 处理命令5# 读系统参数：
-                    # 发送：CMD = 0x21  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送
-                    # DATA0：系统状态
-                    # DATA1~DATA2：电机转速值
-                    # DATA3~DATA4：电压值
-                    # DATA5：IPM温度值
-                    # DATA6~DATA7：输出功率值 
-                    response = "10 02 21 23 00 00 00 37 1C 00 00 A9 10 03"
-                    status = data[3]
-
-                    light_color = ""
-                    system_status = ""
-                    if status == 0x00:
-                        light_color = "red"
-                        system_status = "停止"
-                    elif status == 0x20 or status == 0x21 or status == 0x22 or status == 0x23 or status == 0x24 or status == 0x25 or status == 0x26 or status == 0x27 or status == 0x28 or status == 0x29 or status == 0x2A or status == 0x2B or status == 0x50:
-                        light_color = "blue"
-                        system_status = "故障"
-                    elif status == 0x0B:
-                        light_color = "green"
-                        system_status = "运行"
-                    else:
-                        print(f"Unknown status: {status}")
-
-                    print(f"System Status: {system_status}, Light Color: {light_color}")
-
-                    # self.control_widget.toggle_light(light_color)
-                    
-
-                elif CMD == 0x20:
-                    # 读取软件版本：
-                    # 发送：CMD = 0x20  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送
-                    # DATA0 ~DATAn：版本信息(ASCII码)
-                    response = "10 02 20 56 44 32 2E 30 2E 30 BA 10 03"
-                    
-            else:
-                print("Received invalid data:", hex_data)
-
-
-            # 测试控制板时，需要将应答数据发送到串口
-            self.serial_controller.send_command(response)
-
-            # timestamp01 = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            # formatted_data01 = f"[{timestamp01}] Ack: {response}"
-            # print(formatted_data01)
-            # self.data_display.append(formatted_data01)
-                
-
-        except Exception as e:
-            print(f"Error processing received data: {e}")
-            import traceback
-            traceback.print_exc()
-
-
-
-
-    def motor_serial_data_handle(self, data):
-        try:
-
-            # 转换数据为十六进制
-            hex_data = ' '.join([f"{byte:02X}" for byte in data])
-
-            self.record_received_data(data)
-
-            data_length = len(data)
-        
-            CMD = data[2]
-            # 处理数据
-            # 先校验尾数
-            response = ""
-
-            if data[0] == 0x10 and data[1] == 0x02 :
-                CMD = data[2]
-                if CMD == 0x83:
-                    # 读取档位命令：
-                    # 发送：CMD = 0x83  DATA0 = 速度档位信息 DATA1 = 时间档位信息
-                    # 读系统参数：
-                    # 发送：CMD = 0x83  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送 
-                    # 发送：CMD = 0x83  DATA0 = 速度档位信息 DATA1 = 时间档位信息;
-                    response = "10 02 83 00 01 96 10 03"
-
-                                   
-                elif CMD == 0x82:
-                    # 设定转速
-                    # 发送：CMD = 0x82  DATA0 ~DATA1：设定转速值
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 82 00 01 95 10 03"
-
-                elif CMD == 0x81:
-                    # 电机运行
-                    # 发送：CMD = 0x81  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 81 00 01 94 10 03"
-
-                elif CMD == 0x80:
-                    # 电机停止
-                    # 发送：CMD = 0x80  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送  DATA0 = 0  DATA1 = ACK
-                    response = "10 02 80 00 01 93 10 03"
-
-                elif CMD == 0x21:
-                    # 处理命令5# 读系统参数：
-                    # 发送：CMD = 0x21  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送
-                    # DATA0：系统状态
-                    # DATA1~DATA2：电机转速值
-                    # DATA3~DATA4：电压值
-                    # DATA5：IPM温度值
-                    # DATA6~DATA7：输出功率值 
-                    response = "10 02 21 23 00 00 00 37 1C 00 00 A9 10 03"
-                    status = data[3]
-
-                    light_color = ""
-                    system_status = ""
-                    if status == 0x00:
-                        light_color = "red"
-                        system_status = "停止"
-                    elif status == 0x20 or status == 0x21 or status == 0x22 or status == 0x23 or status == 0x24 or status == 0x25 or status == 0x26 or status == 0x27 or status == 0x28 or status == 0x29 or status == 0x2A or status == 0x2B or status == 0x50:
-                        light_color = "blue"
-                        system_status = "故障"
-                    elif status == 0x0B:
-                        light_color = "green"
-                        system_status = "运行"
-                    else:
-                        print(f"Unknown status: {status}")
-
-                    print(f"System Status: {system_status}, Light Color: {light_color}")
-
-                    print("data_length:", data_length)
-                    if data_length < 10:
-                        # 电机停止
-                        system_status = "停止"
-                        light_color = "red"
-                        self.motor_widget.system_status_label.setText(system_status)
-                        self.motor_widget.motor_speed_label.setText("0 RPM")
-                        self.motor_widget.voltage_label.setText("0 V")
-                        self.motor_widget.temperature_label.setText("0 °C")
-                        self.motor_widget.power_label.setText("0 W")
-
-                    else:
-                        motor_speed = (data[4] << 8) | data[5]
-                        voltage = (data[6] << 8) | data[7]
-                        temperature = data[8]
-                        power = (data[9] << 8) | data[10]
-                        # Convert motor speed from raw value to decimal
-                        motor_speed = (data[4] << 8) | data[5]  # Combine high byte and low byte
-                        motor_speed_actual = motor_speed / 10.0  # Assuming a scaling factor of 10
-                        # Convert voltage from raw value to actual volts (scaling factor depends on hardware)
-                        voltage_actual = voltage / 10.0  # Assuming a scaling factor of 10
-                        temperature_actual = temperature / 10.0  # Assuming temperature is already in °C
-                        power_actual = power / 10.0
-                        self.motor_widget.system_status_label.setText(system_status)
-                        self.motor_widget.motor_speed_label.setText(f"{motor_speed_actual} RPM")
-                        self.motor_widget.voltage_label.setText(f"{voltage_actual}")
-                        self.motor_widget.temperature_label.setText(f"{temperature_actual} °C")
-                        self.motor_widget.power_label.setText(f"{power_actual} W")
-                    
-
-                elif CMD == 0x20:
-                    # 读取软件版本：
-                    # 发送：CMD = 0x20  DATA0 = 0 	DATA1 = 0
-                    # 应答：格式同发送
-                    # DATA0 ~DATAn：版本信息(ASCII码)
-                    # response = "10 02 20 56 44 32 2E 30 2E 30 BA 10 03"
-                    software_version = data[3:7]
-                    software_version_str = ''.join([chr(b) for b in software_version])
-                    print(f"Software Version: {software_version_str}")
-                    # self.motor_widget.software_version_label.setText(software_version_str)
-            else:
-                print("Received invalid data:", hex_data)
-                
-
-        except Exception as e:
-            print(f"Error processing received data: {e}")
-            import traceback
-            traceback.print_exc()
-
 
 
 
@@ -599,3 +434,50 @@ class SerialWidget(QWidget):
                     background-color: #b71c1c;
                 }
             """)
+
+    def save_display_data(self):
+        """保存显示框中的数据到文件"""
+        # 获取显示框中的文本
+        text = self.data_display.toPlainText()
+        
+        if not text:
+            return
+        
+        # 打开文件保存对话框
+        options = QFileDialog.Option.DontUseNativeDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存数据",
+            "",
+            "文本文件 (*.txt);;所有文件 (*)",
+            options=options
+        )
+        
+        if file_path:
+            # 确保文件有.txt扩展名
+            if not file_path.endswith('.txt'):
+                file_path += '.txt'
+                
+            try:
+                with open(file_path, 'w', encoding='utf-8') as file:
+                    file.write(text)
+                    
+                # 显示保存成功消息
+                self.data_display.append(f"\n[系统] 数据已保存到: {file_path}")
+            except Exception as e:
+                self.data_display.append(f"\n[错误] 保存失败: {str(e)}")
+
+    def copy_display_data(self):
+        """复制显示框中的数据到剪贴板"""
+        # 获取显示框中的文本
+        text = self.data_display.toPlainText()
+        
+        if not text:
+            return
+            
+        # 复制到剪贴板
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        
+        # 显示复制成功消息
+        self.data_display.append("\n[系统] 数据已复制到剪贴板")
