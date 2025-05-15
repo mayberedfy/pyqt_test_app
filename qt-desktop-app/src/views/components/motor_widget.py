@@ -3,13 +3,11 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 
-
 class MotorWidget(QWidget):
-    def __init__(self, serial_controller=None, serial_widget=None, parent=None):
+    def __init__(self, serial_controller=None, serial_widget=None, serial_data_controller=None, parent=None):
         super().__init__(parent)
         self.serial_controller = serial_controller
-        self.serial_widget = serial_widget
-        
+
         # 创建水平主布局而不是垂直布局
         self.main_layout = QHBoxLayout(self)  # 使用水平布局
         self.main_layout.setSpacing(10)  # 设置模块之间的间距
@@ -290,10 +288,8 @@ class MotorWidget(QWidget):
         version_layout.addWidget(self.get_version_button)
         version_layout.addWidget(self.version_label, 1)  # 添加伸缩因子1
 
-
         # 添加到控制布局
         control_layout.addLayout(version_layout)
-
 
         # 添加弹性空间在按钮下方
         control_layout.addStretch()
@@ -301,66 +297,149 @@ class MotorWidget(QWidget):
         self.main_layout.addWidget(control_frame, 1)
         
 
-       
-
+    
     def _on_get_version(self):
         """获取软件版本"""
         if not self._check_serial_connection():
             return
 
-        command = "10 02 20 00 00 32 10 03"
-        self.serial_controller.send_command(command)
+         # 清理旧的信号连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
+
+        # 记录当前步骤
+        self.current_step = 0
+        self.command_steps = [
+            {
+                'command': "10 02 20 00 00 32 10 03",
+                'handler': self._handle_version_response,
+                'description': '获取软件版本'
+            }   
+        ]
+        
+        # 连接通用响应处理函数
+        print(f"正在发送: {self.command_steps[0]['description']}")
+        self.serial_controller.data_received.connect(self._universal_response_handler)
+        
+        # 发送第一个命令
+        self.serial_controller.send_command(self.command_steps[0]['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer(self)
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self._on_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
+
+
+
 
     def _on_stop(self):
         """停止电机"""
         if not self._check_serial_connection():
             return
-            
-        command = "10 02 80 00 00 92 10 03"
-        self.serial_controller.send_command(command)
         
-        # 连接信号处理器用于启动响应
-        self.serial_controller.data_received.connect(self.handle_stop_response)
+        # 清理旧的信号连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
 
-    def handle_stop_response(self, data):
-        # 确认停止命令成功
-        if len(data) >= 4 and data[2] == 0x80:
-            # 处理停止成功
-            print("电机停止命令已确认")
-            
-        # 断开此信号连接
-        self.serial_controller.data_received.disconnect(self.handle_stop_response)
+        # 记录当前步骤
+        self.current_step = 0
+        self.command_steps = [
+            {
+                'command': "10 02 80 00 00 92 10 03",
+                'handler': self._handle_stop_response,
+                'description': '电机停止'
+            },
+            {
+                'command': "10 02 21 00 00 33 10 03",
+                'handler': self._handle_status_response,
+                'description': '读取状态'
+            }
+        ]
         
+        # 连接通用响应处理函数
+        print(f"正在发送: {self.command_steps[0]['description']}")
+        self.serial_controller.data_received.connect(self._universal_response_handler)
+        
+        # 发送第一个命令
+        self.serial_controller.send_command(self.command_steps[0]['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer(self)
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self._on_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
+
+
+        # self.serial_controller.send_command(command)
+        
+        # self.serial_controller.data_received.connect(self._universal_response_handler)
+
+
+        # 连接信号处理器用于启动响应
+        # self.serial_controller.data_received.connect(self.handle_stop_response)
+
         # 发送读取状态命令获取最新状态
         # self._on_refresh_status()
 
+    # def handle_stop_response(self, data):
+    #     # 确认停止命令成功
+    #     if len(data) >= 4 and data[2] == 0x80:
+    #         # 处理停止成功
+    #         print("电机停止命令已确认")
+    #     # 断开此信号连接
+    #     self.serial_controller.data_received.disconnect(self.handle_stop_response)
+        
+       
 
     def _on_start(self):
-        """启动电机"""
+        """启动电机 - 问题修复版"""
         if not self._check_serial_connection():
             return
         
-        # 电机启动时先发送速度设定命令，然后再发送启动命令
-        self._on_send_speed()  
-            
-        command = "10 02 81 00 00 93 10 03"
-        self.serial_controller.send_command(command)
-        self.system_status_label.setText("启动中...")
+        # 清理旧的信号连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
         
-        # 连接信号处理器用于启动响应
-        self.serial_controller.data_received.connect(self.handle_start_response)
+        # 记录当前步骤
+        self.current_step = 0
+        self.command_steps = [
+            {
+                'command': self.get_send_speed_command(self.speed_input.value()),
+                'handler': self._handle_speed_response,
+                'description': '设置速度'
+            },
+            {
+                'command': "10 02 81 00 00 93 10 03", 
+                'handler': self._handle_start_response,
+                'description': '启动电机'
+            },
+            {
+                'command': "10 02 21 00 00 33 10 03",
+                'handler': self._handle_status_response,
+                'description': '读取状态'
+            }
+        ]
+        
+        # 连接通用响应处理函数
+        print(f"正在发送: {self.command_steps[0]['description']}")
+        self.serial_controller.data_received.connect(self._universal_response_handler)
+        
+        # 发送第一个命令
+        self.serial_controller.send_command(self.command_steps[0]['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer(self)
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self._on_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
 
-    def handle_start_response(self, data):
-        # 确认启动命令成功
-        if len(data) >= 4 and data[2] == 0x81:
-            # 处理启动成功
-            print("电机启动命令已确认")
-            
-        # 断开此信号连接
-        self.serial_controller.data_received.disconnect(self.handle_start_response)
-        
-        # 发送读取状态命令获取最新状态
-        self._on_refresh_status()
 
     def _on_send_speed(self):
         """发送速度设定值"""
@@ -368,18 +447,177 @@ class MotorWidget(QWidget):
             return
             
         speed = self.speed_input.value()
-        command = self.get_send_speed_command(speed)
         
-        # 首先连接回调处理函数
-        self.serial_controller.data_received.connect(self.handle_speed_response)
+        # 清理旧的信号连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
         
-        # 然后发送命令
-        self.serial_controller.send_command(command)
+        # 记录当前步骤
+        self.current_step = 0
+        self.command_steps = [
+            {
+                'command': self.get_send_speed_command(speed),
+                'handler': self._handle_speed_response,
+                'description': '设置速度'
+            },
+            {
+                'command': "10 02 21 00 00 33 10 03",
+                'handler': self._handle_status_response,
+                'description': '读取状态'
+            }
+        ]
         
-        # 不要在这里断开连接！断开连接应该在handle_speed_response中完成
+        # 连接通用响应处理函数
+        print(f"正在发送: {self.command_steps[0]['description']}")
+        self.serial_controller.data_received.connect(self._universal_response_handler)
+        
+        # 发送第一个命令
+        self.serial_controller.send_command(self.command_steps[0]['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer(self)
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self._on_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
+
+
+
+
+    def _universal_response_handler(self, data):
+        """通用响应处理函数"""
+        print(f"收到数据: {' '.join([f'{b:02X}' for b in data])}")
+        self.serial_data_controller.record_received_data(data)
+
+        if self.current_step < len(self.command_steps):
+            # 调用当前步骤的处理函数
+            self.command_steps[self.current_step]['handler'](data)
+            
+            # 停止当前超时计时器
+            self.response_timer.stop()
+            
+            # 移至下一步
+            self.current_step += 1
+            if self.current_step < len(self.command_steps):
+                # 发送下一个命令
+                print(f"正在发送: {self.command_steps[self.current_step]['description']}")
+                self.serial_controller.send_command(self.command_steps[self.current_step]['command'])
+                
+                # 重启超时计时器
+                self.response_timer.start(1000)
+            else:
+                # 完成所有步骤，断开信号连接
+                self.serial_controller.data_received.disconnect(self._universal_response_handler)
+                print("完成所有命令序列")
+
+    def _on_response_timeout(self):
+        """响应超时处理 - 修复版"""
+        print(f"命令 '{self.command_steps[self.current_step]['description']}' 响应超时")
+        
+        # 移至下一步
+        self.current_step += 1
+        if self.current_step < len(self.command_steps):
+            # 发送下一个命令
+            print(f"正在发送: {self.command_steps[self.current_step]['description']}")
+            self.serial_controller.send_command(self.command_steps[self.current_step]['command'])
+            
+            # 重启超时计时器
+            self.response_timer.start(1000)
+        else:
+            # 完成所有步骤，断开信号连接
+            self.serial_controller.data_received.disconnect(self._universal_response_handler)
+            print("超时后完成所有命令序列")
+
+   
+
+    def send_next_command(self):
+        """发送队列中的下一个命令"""
+        if not self.command_queue:
+            return  # 队列为空，结束
+            
+        command_info = self.command_queue.pop(0)  # 取出队列首个元素
+        
+        # 断开之前的所有连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
+            
+        # 连接新的响应处理函数
+        self.serial_controller.data_received.connect(command_info['handler'])
+        
+        # 打印调试信息
+        print(f"正在发送: {command_info['description']}")
+        
+        # 发送命令
+        self.serial_controller.send_command(command_info['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer()
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self.handle_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
+
+    def handle_response_timeout(self):
+        """处理响应超时"""
+        print("命令响应超时，继续下一个")
+        self.send_next_command()  # 继续处理队列中的下一个命令
+
+    def _handle_version_response(self, data):
+        """处理版本信息响应"""
+        if len(data) >= 4 and data[2] == 0x20:
+            software_version_bytes = data[3:-3]  # Excluding header, cmd, checksum and footer
+            software_version_str = ''.join([chr(b) for b in software_version_bytes])
+            self.version_label.setText(software_version_str)
+            print(f"软件版本: {software_version_str}")
+
+        # 停止超时计时器
+        self.response_timer.stop()
+
+    # 各个命令的响应处理函数
+    def _handle_speed_response(self, data):
+        """处理速度设置响应"""
+        if len(data) >= 4 and data[2] == 0x82:
+            print("速度设置成功")
+        
+        # 停止超时计时器
+        self.response_timer.stop()
+        
+
+    def _handle_start_response(self, data):
+        """处理启动命令响应"""
+        if len(data) >= 4 and data[2] == 0x81:
+            print("电机启动成功")
+        
+        # 停止超时计时器
+        self.response_timer.stop()
+        
+
+    def _handle_stop_response(self, data):
+        """处理启动命令响应"""
+        if len(data) >= 4 and data[2] == 0x80:
+            print("电机停止成功")
+        
+        # 停止超时计时器
+        self.response_timer.stop()
+        
+
+    def _handle_status_response(self, data):
+        """处理状态查询响应"""
+        if len(data) >= 13 and data[2] == 0x21:
+            self.update_motor_info(data)
+            print("状态查询完成")
+        
+        # 停止超时计时器
+        self.response_timer.stop()
+        
+        # 不要尝试断开这个方法 - 它没有被直接连接
+
+
 
     def get_send_speed_command(self, speed):
-        if speed < 600 or speed > 3450:
+        if (speed < 600 or speed > 3450):
             raise ValueError("速度值超出范围 (600-3450 RPM)")
         # 将速度值转为两个字节
         speed_high = (speed >> 8) & 0xFF
@@ -391,36 +629,7 @@ class MotorWidget(QWidget):
         return command
 
 
-    def handle_speed_response(self, data):
-        # 确认速度设定命令成功
-        if len(data) >= 4 and data[2] == 0x82:
-            # 处理速度设定成功
-            print("电机速度设定命令已确认")
-            
-        # 断开此信号连接
-        self.serial_controller.data_received.disconnect(self.handle_speed_response)
         
-        # 发送读取状态命令获取最新状态
-        self._on_refresh_status()
-
-    def send_command_with_response(self, command, callback):
-        """
-        发送命令并设置响应回调
-        command: 要发送的命令字符串
-        callback: 收到响应时调用的回调函数
-        """
-        # 先断开旧连接(如果有)
-        try:
-            self.serial_controller.data_received.disconnect()
-        except:
-            pass
-        
-        # 连接新回调
-        self.serial_controller.data_received.connect(callback)
-        
-        # 发送命令
-        self.serial_controller.send_command(command)
-
     def _on_refresh_status(self):
         """发送读取状态命令，获取电机即时状态"""
         # 检查串口是否打开
@@ -437,6 +646,8 @@ class MotorWidget(QWidget):
         self.voltage_label.setText("读取中...")
         self.temperature_label.setText("读取中...")
         self.power_label.setText("读取中...")
+
+
 
     def _check_serial_connection(self):
         """检查串口连接状态，如果未连接则显示提示"""
@@ -456,25 +667,6 @@ class MotorWidget(QWidget):
             return False
         return True
 
-    def handle_response_timeout(self):
-        # 检查是否还在"读取中"状态
-        if self.system_status_label.text() == "读取中...":
-            self.system_status_label.setText("读取超时")
-            self.motor_speed_label.setText("--")
-            # ...其他状态恢复...
-            
-            # 断开信号连接
-            try:
-                self.serial_controller.data_received.disconnect(self.handle_data_received)
-            except:
-                pass
-
-    def handle_data_received(self, data):
-        # 解析数据并更新显示
-        self.update_motor_info(data)
-        
-        # 断开信号连接
-        self.serial_controller.data_received.disconnect(self.handle_data_received)
                  
     def update_motor_info(self, data):
         """根据接收到的数据更新电机信息
@@ -556,3 +748,23 @@ class MotorWidget(QWidget):
             self.light_indicator.setStyleSheet(style_base % ('#1565c0', '#2196f3'))
         else:  # 默认灰色
             self.light_indicator.setStyleSheet(style_base % ('#999', '#f5f5f5'))
+
+    def _debug_connections(self):
+        """打印当前信号连接状态"""
+        # 在 PyQt 中没有直接方法检查信号连接，但可以尝试断开再连接
+        try:
+            self.serial_controller.data_received.disconnect(self._universal_response_handler)
+            print("_universal_response_handler 已连接")
+            # 重新连接
+            self.serial_controller.data_received.connect(self._universal_response_handler)
+        except:
+            print("_universal_response_handler 未连接")
+            
+        for handler_name in ["_handle_speed_response", "_handle_start_response", "_handle_status_response"]:
+            handler = getattr(self, handler_name)
+            try:
+                self.serial_controller.data_received.disconnect(handler)
+                print(f"{handler_name} 已连接")
+                # 不要重新连接，因为我们只是在调试
+            except:
+                print(f"{handler_name} 未连接")

@@ -5,6 +5,8 @@ from views.base_panel import BasePanel
 from views.components.serial_widget import SerialWidget
 from views.components.motor_widget import MotorWidget
 from controllers.serial_controller import SerialController
+from controllers.serial_data_controller import SerialDataController  
+
 
 
 class MotorPanel(BasePanel):
@@ -19,9 +21,19 @@ class MotorPanel(BasePanel):
         
         # 创建串口组件，传入串口控制器
         self.serial_widget = SerialWidget(serial_controller=self.serial_controller, motor_widget=self.motor_widget, parent_type="motor")
-     
+           # 创建新的串口控制器实例
+        
+        self.serial_data_controller = SerialDataController(
+            self.serial_controller,
+            None,
+            self,
+            self.serial_widget
+        )  
+
         # 设置电机组件与串口组件绑定
         self.motor_widget.serial_widget = self.serial_widget  
+        self.motor_widget.serial_data_controller = self.serial_data_controller
+  
 
 
         # 添加到布局

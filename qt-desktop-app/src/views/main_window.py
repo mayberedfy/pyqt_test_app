@@ -28,25 +28,22 @@ class MainWindow(QMainWindow):
         
         # 创建垂直布局
         self.layout = QVBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(100, 50, 100, 50)  # 设置较大的左右边距
-        self.layout.setSpacing(20)  # 按钮之间的间距
+        self.layout.setContentsMargins(0, 0, 0, 0)  # 移除边距以便使用对齐方式
         
+        # 创建按钮容器 - 居中对齐
+        button_container = QWidget()
+        button_layout = QVBoxLayout(button_container)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(20)  # 按钮之间的间距
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 垂直居中
         
-        # 添加三个长矩形按钮
-        self.create_button("控制板测试", self.open_control_panel)
-        self.create_button("电机板测试", self.open_motor_panel)
-        self.create_button("网络联调", self.open_net_panel)
+        # 添加三个按钮到按钮容器
+        self.create_button("控制板测试", self.open_control_panel, button_layout)
+        self.create_button("电机板测试", self.open_motor_panel, button_layout)
+        self.create_button("网络联调", self.open_net_panel, button_layout)
         
-        # 添加底部信息
-        # footer = QLabel("© 2025 工业测控平台")
-        # footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # footer.setFont(QFont("Arial", 10))
-        # footer.setStyleSheet("color: white; background-color: rgba(0,0,0,100);")
-        # self.layout.addWidget(footer)
-        
-        # 添加弹性空间
-        self.layout.addStretch(1)  # 标题上方的弹性空间
-        self.layout.addStretch(1)  # 页脚下方的弹性空间
+        # 将按钮容器添加到主布局
+        self.layout.addWidget(button_container, 1, Qt.AlignmentFlag.AlignCenter)
         
     def set_background_image(self):
         """设置窗口背景图片，并调整透明度"""
@@ -93,16 +90,15 @@ class MainWindow(QMainWindow):
                 # 确保背景图可见
                 self.setAutoFillBackground(True)
         
-    def create_button(self, text, callback):
-        """创建长矩形按钮"""
+    def create_button(self, text, callback, parent_layout):
+        """创建适中矩形按钮"""
         button = QPushButton(text)
         
         # 设置字体
-        button.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        button.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         
-        # 设置尺寸
-        button.setFixedHeight(80)  # 固定高度
-        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # 设置尺寸 - 调短按钮长度
+        button.setFixedSize(300, 80)  # 固定宽度和高度
         
         # 设置样式
         button.setStyleSheet("""
@@ -126,7 +122,7 @@ class MainWindow(QMainWindow):
         button.clicked.connect(callback)
         
         # 添加到布局
-        self.layout.addWidget(button)
+        parent_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignCenter)
         
         return button
 

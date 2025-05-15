@@ -2,6 +2,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from datetime import datetime
 
 class SerialDataController(QObject):
+
     # Define signals for communication
     data_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
@@ -16,6 +17,7 @@ class SerialDataController(QObject):
         self.control_widget = control_widget
         self.motor_widget = motor_widget
         self.serial_widget = serial_widget
+        
 
     # 控制板的串口数据处理方法
     # 控制板发送指令给电机板，此处需要解析控制板的指令并且给与应答反馈
@@ -217,21 +219,22 @@ class SerialDataController(QObject):
                     system_status = "停止"
                     light_color = "red"
                     self.motor_widget.system_status_label.setText(system_status)
+                    self.motor_widget.set_light_status("red")
+                    self.motor_widget.set_light_status(light_color)
                     self.motor_widget.motor_speed_label.setText("0 RPM")
                     self.motor_widget.voltage_label.setText("0 V")
                     self.motor_widget.temperature_label.setText("0 °C")
                     self.motor_widget.power_label.setText("0 W")
-
                 else:
                     motor_speed = (data[4] << 8) | data[5]
                     voltage = (data[6] << 8) | data[7]
                     temperature = data[8]
                     power = (data[9] << 8) | data[10]
                     motor_speed = (data[4] << 8) | data[5]  
-                    motor_speed_actual = motor_speed / 1.0 
+                    motor_speed_actual = motor_speed / 1
                     voltage_actual = voltage / 1.0  
                     temperature_actual = temperature / 1.0  
-                    power_actual = power / 1.0
+                    power_actual = power / 1
                     self.motor_widget.system_status_label.setText(system_status)
                     self.motor_widget.motor_speed_label.setText(f"{motor_speed_actual} RPM")
                     self.motor_widget.voltage_label.setText(f"{voltage_actual}")
