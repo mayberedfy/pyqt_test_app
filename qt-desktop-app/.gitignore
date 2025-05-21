@@ -1,0 +1,20 @@
+# Ignore build directory
+/build/
+/build/*
+
+# Ignore dist directory
+/dist/
+/dist/*
+
+# PyInstaller generated files
+*.spec
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+ENV/

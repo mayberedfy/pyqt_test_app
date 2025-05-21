@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         """设置窗口背景图片，并调整透明度"""
         # 获取资源路径
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        image_path = os.path.join(base_path, "resources", "industrial_background.jpg")
+        image_path = os.path.join(base_path, "resources", "industrial_background.png")
         
         # 如果图片不存在，使用默认样式
         if not os.path.exists(image_path):

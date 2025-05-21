@@ -185,6 +185,15 @@ class MotorWidget(QWidget):
                 padding: 2px;
                 min-height: 25px;
             }
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 16px;  /* 设置按钮宽度 */
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background-color: #e6e6e6;
+            }
+            QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
+                background-color: #d0d0d0;
+            }
         """)
         speed_setting_layout.addWidget(self.speed_input)
         
@@ -296,8 +305,44 @@ class MotorWidget(QWidget):
         
         self.main_layout.addWidget(control_frame, 1)
         
+        
+    def _on_refresh_status(self):
+        """发送读取状态命令，获取电机即时状态"""
+        # 检查串口是否打开
+        if not self._check_serial_connection():
+            return
 
-    
+         # 清理旧的信号连接
+        try:
+            self.serial_controller.data_received.disconnect()
+        except:
+            pass
+
+        # 记录当前步骤
+        self.current_step = 0
+        self.command_steps = [
+            {
+                'command': "10 02 21 00 00 33 10 03",
+                'handler': self._handle_status_response,
+                'description': '读取状态'
+            }   
+        ]
+        
+        # 连接通用响应处理函数
+        print(f"正在发送: {self.command_steps[0]['description']}")
+        self.serial_controller.data_received.connect(self._universal_response_handler)
+        
+        # 发送第一个命令
+        self.serial_controller.send_command(self.command_steps[0]['command'])
+        
+        # 设置超时处理
+        self.response_timer = QTimer(self)
+        self.response_timer.setSingleShot(True)
+        self.response_timer.timeout.connect(self._on_response_timeout)
+        self.response_timer.start(100)  # 100毫秒超时
+
+
+
     def _on_get_version(self):
         """获取软件版本"""
         if not self._check_serial_connection():
@@ -629,23 +674,6 @@ class MotorWidget(QWidget):
         return command
 
 
-        
-    def _on_refresh_status(self):
-        """发送读取状态命令，获取电机即时状态"""
-        # 检查串口是否打开
-        if not self._check_serial_connection():
-            return
-        
-        # 发送读系统参数命令
-        command = "10 02 21 00 00 33 10 03"
-        self.serial_controller.send_command(command)
-        
-        # 提示用户已发送读取命令
-        self.system_status_label.setText("读取中...")
-        self.motor_speed_label.setText("读取中...")
-        self.voltage_label.setText("读取中...")
-        self.temperature_label.setText("读取中...")
-        self.power_label.setText("读取中...")
 
 
 
@@ -700,13 +728,14 @@ class MotorWidget(QWidget):
                     0x50: "未知故障"
                 }
                                 
+                status_text = "故障"
                 # 获取具体错误描述
                 if status in fault_codes:
                     status_text = f"故障: {fault_codes[status]}"
                 else:
                     status_text = "故障: 未定义错误"
                 
-                status_text = "故障"
+                
                 self.set_light_status('blue')  # 蓝灯表示故障
             
             # 更新系统状态标签
